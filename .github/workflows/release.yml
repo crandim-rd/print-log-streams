@@ -22,6 +22,11 @@ jobs:
               extension: "",
             }
           - {
+              os: ubuntu-latest,
+              target: x86_64-unknown-linux-musl,
+              extension: "",
+            }
+          - {
               os: windows-latest,
               target: x86_64-pc-windows-msvc,
               extension: .exe,
@@ -35,6 +40,16 @@ jobs:
         shell: bash
         run: |
           echo "PROJECT_NAME=$(sed -n 's/^name = "\(.*\)"/\1/p' Cargo.toml | head -n1)" >> $GITHUB_ENV
+
+      # add musl tools
+      - name: Install musl tools
+        if: matrix.job.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt install -qq -y musl-tools --no-install-recommends
+
+      # add toolchain for musl
+      - name: Add toolchain for musl
+        if: matrix.job.target == 'x86_64-unknown-linux-musl'
+        run: rustup target add x86_64-unknown-linux-musl
 
       # ビルド
       - name: Build
