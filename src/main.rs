@@ -4,6 +4,7 @@
 #![allow(clippy::result_large_err)]
 
 use std::time::SystemTime;
+use std::vec;
 
 use aws_config::Region;
 use aws_sdk_cloudwatch::primitives::DateTime;
@@ -133,18 +134,6 @@ async fn main() -> Result<(), AWSError> {
     let client = Client::new(&shared_config);
     let current_datetime = Utc::now();
     let streams = get_streams(&client, &group).await?;
-    for stream in streams.iter() {
-        if let Some(last_event_timestamp) = stream.last_event_timestamp() {
-            // last_event_timestamp is expressed as the number of milliseconds after Jan 1, 1970 00:00:00 UTC
-
-            let last_event_datetime = Utc.timestamp_opt(last_event_timestamp / 1000, 0).unwrap();
-            println!("    last event: {}", last_event_datetime.to_string());
-
-            // 何日前に更新されたか確認
-            let days_ago = (current_datetime - last_event_datetime).num_days();
-            println!("    {} days ago", days_ago);
-        }
-    }
 
     let count_1month = count_active_streams(&streams, &current_datetime, 30);
     let count_1week = count_active_streams(&streams, &current_datetime, 7);
@@ -153,24 +142,31 @@ async fn main() -> Result<(), AWSError> {
     if let Some(namespace) = namespace {
         let client = aws_sdk_cloudwatch::Client::new(&shared_config);
         let timestamp = DateTime::from(SystemTime::from(current_datetime));
+        let dimention = aws_sdk_cloudwatch::types::Dimension::builder()
+            .set_name(Some("LogGroupName".to_string()))
+            .set_value(Some(group))
+            .build();
         let metric_data = vec![
             MetricDatum::builder()
                 .set_metric_name(Some("MonthlyActiveStreams".to_string()))
                 .set_timestamp(Some(timestamp))
                 .set_unit(Some(StandardUnit::Count))
                 .set_value(Some(count_1month as f64))
+                .set_dimensions(Some(vec![dimention.clone()]))
                 .build(),
             MetricDatum::builder()
                 .set_metric_name(Some("WeeklyActiveStreams".to_string()))
                 .set_timestamp(Some(timestamp))
                 .set_unit(Some(StandardUnit::Count))
                 .set_value(Some(count_1week as f64))
+                .set_dimensions(Some(vec![dimention.clone()]))
                 .build(),
             MetricDatum::builder()
                 .set_metric_name(Some("DailyActiveStreams".to_string()))
                 .set_timestamp(Some(timestamp))
                 .set_unit(Some(StandardUnit::Count))
                 .set_value(Some(count_1day as f64))
+                .set_dimensions(Some(vec![dimention.clone()]))
                 .build(),
         ];
         client
