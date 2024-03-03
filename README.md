@@ -1,0 +1,2 @@
+# count-active-streams
+指定されたCloudWatchLogsグループ内の直近で更新されたストリーム数を数えて、指定されたNamespaceに対して、その数をCLoudWatchメトリクスとして送信します。
