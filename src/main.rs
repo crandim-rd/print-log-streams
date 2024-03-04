@@ -49,12 +49,23 @@ async fn get_streams(
     client: &aws_sdk_cloudwatchlogs::Client,
     log_group_name: &str,
 ) -> Result<Vec<LogStream>, aws_sdk_cloudwatchlogs::Error> {
-    let resp = client
+    let streams_result = client
         .describe_log_streams()
         .log_group_name(log_group_name)
+        .into_paginator()
+        .items()
         .send()
-        .await?;
-    let streams = resp.log_streams().to_owned();
+        .collect::<Vec<_>>()
+        .await;
+
+    let mut streams: Vec<LogStream> = Vec::new();
+
+    for result in streams_result {
+        match result {
+            Ok(log_stream) => streams.push(log_stream), // 成功した場合はVecに追加
+            Err(e) => println!("Warning: Failed to retrieve a log stream: {:?}", e), // エラーの場合は警告を表示
+        }
+    }
     println!("Found {} streams:", streams.len());
     Ok(streams)
 }
@@ -134,6 +145,31 @@ async fn main() -> Result<(), AWSError> {
     let client = Client::new(&shared_config);
     let current_datetime = Utc::now();
     let streams = get_streams(&client, &group).await?;
+    println!("Found {} streams:", streams.len());
+
+    // let mut sorted_streams = streams.clone();
+    // sorted_streams.sort_by(|a, b| {
+    //     a.last_event_timestamp()
+    //         .unwrap_or(0)
+    //         .cmp(&b.last_event_timestamp().unwrap_or(0))
+    // });
+
+    // for stream in sorted_streams.into_iter().rev().take(5) {
+    //     if let Some(last_event_timestamp) = stream.last_event_timestamp() {
+    //         // last_event_timestamp is expressed as the number of milliseconds after Jan 1, 1970 00:00:00 UTC
+    //         let last_event_datetime = Utc.timestamp_opt(last_event_timestamp / 1000, 0).unwrap();
+    //         println!(
+    //             "  {} last event: {}",
+    //             stream.log_stream_name().as_deref().unwrap_or(""),
+    //             last_event_datetime
+    //         );
+    //     } else {
+    //         println!(
+    //             "  {} last event: never",
+    //             stream.log_stream_name().as_deref().unwrap_or("")
+    //         );
+    //     }
+    // }
 
     let count_1month = count_active_streams(&streams, &current_datetime, 30);
     let count_1week = count_active_streams(&streams, &current_datetime, 7);
